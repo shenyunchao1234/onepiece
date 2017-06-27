@@ -1,0 +1,96 @@
+[num] = xlsread('example1');
+%num=[0 0 -0.851759 0.563468 0.328113 1.0053 1.00178 0.988874 -0.8574 0.5539 0.307 0.0706 0.1263 -0.1201;...
+   %  0 0 -0.84144 0.58199 0.302402 0.9987 0.996821 0.983505 -0.8444 0.5701 0.278 0.0653 0.1313 -0.1224];
+times = size(num,1);
+for i=1:times
+    %状态量的初始迭代值
+    i1 = num(i,3);
+    theta1 = atan(num(i,12)/num(i,9));
+    i2 = num(i,4);
+    theta2 = atan(num(i,13)/num(i,10));
+    i3 = num(i,5);
+    theta3 =atan(num(i,14)/num(i,11));
+    u0 = 1;
+    x1 = 0.1;
+    x2 = -6.667e-3;
+    x3 = 0.06067;
+    
+    % x 是状态矢量（选取电流）
+    x = [i1 , theta1 , i2 , theta2 , i3 ,theta3, u0 , x1 ,x2 , x3]';
+    
+    %权重矩阵的求取之后必须进行sigma相关系数的确认工作）
+    R_1 = diag([0.1 , 0.1 , 0.656 ,1.234 , 1.951 , 0.44,0.22  , 0.07 , 2.03, 0.76, 0.247, 3.05, 1.14,0.37]);
+    R = R_1.^2;
+    %基本默认数值获取
+    r1 = 1.3076e-3;
+    r2 = 8.489e-4;
+    r3 = 6.053e-4;
+    k1 = 1;
+    k2 = 1;
+    k3 = 1;
+    bm = 9.79132e-4;
+    gm = 4.35e-3;
+    %量测值矢量z的生成（包含电压的平方，电流，有功，无功）
+    z =num(i,:)';
+    %以下纯属虚构，如有雷同，纯属巧合
+    
+    %首先是建立函数hfunc
+    hfunc = process(x);
+    %建立目标函数
+    J = (z - hfunc)' * (R\ (z-hfunc));
+    %这是分割线
+    h = process2(x);
+    %接下来进行迭代计算
+    delta_x = cholesky((h' * (R\h)) , h' * (R\ (z - hfunc)));
+    x = delta_x + x;
+    %计数器ti
+    ti = 1;
+    [m,n] = max(abs(delta_x));
+    while (m>1e-5)
+        %首先是建立函数hfunc
+        hfunc = process(x);
+        %建立目标函数
+        J = (z - hfunc)' *( R\ (z-hfunc));
+        %这是分割线
+        h = process2(x);
+        %接下来进行迭代计算
+        delta_x = cholesky((h' * (R\h)) , h' * (R\(z - hfunc)));
+        x = delta_x + x;
+        %计数器ti
+        ti = ti+1;
+        if (ti>=50)
+            break;
+        end
+        [m,n] = max(abs(delta_x));
+    end
+    reg(:,i) = x;
+    i = i+1;
+end
+c = 1: i-1;
+
+%plot(c ,reg(9,c),'o');
+
+t = reg(9,:)';
+fd = purevariance(t);
+plot(c , fd);
+grid on
+%sq1 = sort(t);
+%plot(c, sq1, 'o')
+%最后一段是编写方差作为收敛门槛
+number = 1;
+count1 = 1;
+test=[];
+final = size(t,1);
+while number <= final
+    [avg , count2 , fc] = variance(t(number:final));
+    if count2 == final + 1
+        disp('不存在的')
+        break;
+    end
+    number = number + count2 - 1;
+    test(count1) = avg;
+    count1 = count1 + 1;
+end
+test
+ 
+
